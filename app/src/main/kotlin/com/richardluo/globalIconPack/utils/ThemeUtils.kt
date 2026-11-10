@@ -15,17 +15,27 @@ fun currentThemeSig(context: Application): ThemeSig? {
   )
 }
 
-class ThemeColorMonitor(val context: Application) {
-  @Volatile private var assetsSeq: Int? = Resources.getAssetsSeq(context.resources)
+class ThemeColorMonitor internal constructor(private val readAssetsSeq: () -> Int?) {
+  constructor(context: Application) : this({
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Resources.getAssetsSeq(context.resources)
+    else null
+  })
+
+  @Volatile private var assetsSeq: Int? = readAssetsSeq()
+  private var updating = false
 
   fun update(doUpdate: () -> Unit) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      val newAssetsSeq = Resources.getAssetsSeq(context.resources)
-      if (assetsSeq == newAssetsSeq) return
-      synchronized(this) {
-        if (assetsSeq == newAssetsSeq) return
+    val newAssetsSeq = readAssetsSeq()
+    if (assetsSeq == newAssetsSeq) return
+    synchronized(this) {
+      // Rebuilding fallback drawables loads icons through this same monitor.
+      if (updating || assetsSeq == newAssetsSeq) return
+      updating = true
+      try {
         doUpdate()
         assetsSeq = newAssetsSeq
+      } finally {
+        updating = false
       }
     }
   }

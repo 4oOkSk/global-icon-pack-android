@@ -41,6 +41,9 @@ policy are restored even after an exception. Forced monochrome rendering obtains
 from either the resource receiver or the current application on the Android 17 package-manager
 path. Calendar state updates preserve unknown or incompatible launcher state types.
 
+Theme resource refresh skips recursive requests while rebuilding fallback drawables. A failed
+refresh leaves the resource version unchanged so a later request can retry.
+
 ## Builds and checks
 
 Use JDK 21, Android SDK platform 37 and the checked-in Gradle wrapper. The build tasks are:
@@ -58,7 +61,8 @@ unsigned unless that ignored file provides `storeFile`, `storePassword`, `keyAli
 certificate. Preserve any settings you need before switching installations.
 
 JVM tests cover legacy strings, current persisted calendar state, unknown types, incompatible
-return values and throwing implementations. Compilation and these tests do not establish
+return values, throwing implementations, recursive fallback refresh and retry after refresh
+failure. Compilation and these tests do not establish
 bootloop safety on a device. Device verification must use a verified Android 17 framework and
 a compatible LSPosed implementation, with logs from System UI, the launcher and system_server.
 
