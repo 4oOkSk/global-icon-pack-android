@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string name="appName">全局图标包</string>
+    <string name="general_notificationIcons">通知图标</string>
+    <string name="general_notificationIcons_summary">用所选图标包替换状态栏和标准通知标题的小图标。请在 LSPosed 中勾选系统界面，修改后重启系统界面。建议使用透明背景或单色图标包。</string>
     <string name="warn_enableModule">请先确认 Xposed 模块已启用。</string>
     <string name="info_iconPackApplied">图标包已应用。请手动点击“重启XXX”。</string>
     <string name="setup_chooseMode">请选择一种模式</string>

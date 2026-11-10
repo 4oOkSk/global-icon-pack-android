@@ -33,10 +33,12 @@ extensions.configure<ApplicationExtension> {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
-  val keystoreProps =
-    Properties().apply { load(FileInputStream("${project.rootDir}/keystore.properties")) }
+  val keystoreProps = Properties().apply {
+    val propsFile = rootProject.file("keystore.properties")
+    if (propsFile.exists()) propsFile.inputStream().use { load(it) }
+  }
   signingConfigs {
-    create("release") {
+    if (keystoreProps.isNotEmpty()) create("release") {
       keyAlias = keystoreProps["keyAlias"].toString()
       keyPassword = keystoreProps["keyPassword"].toString()
       storeFile = file(keystoreProps["storeFile"].toString())
@@ -49,9 +51,10 @@ extensions.configure<ApplicationExtension> {
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      signingConfig = signingConfigs.findByName("release")
     }
     create("debugApp") {
+      applicationIdSuffix = ".fork"
       isDebuggable = true
       signingConfig = signingConfigs.getByName("debug")
       isDefault = true
@@ -92,6 +95,7 @@ tasks.register("printVersion") {
 
 dependencies {
   compileOnly(libs.libxposed.api)
+  testImplementation(libs.junit)
   implementation(libs.libxposed.service)
   implementation(libs.core.ktx)
   implementation(libs.activity)

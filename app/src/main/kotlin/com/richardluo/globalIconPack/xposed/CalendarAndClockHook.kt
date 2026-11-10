@@ -265,18 +265,7 @@ class CalendarAndClockHook(private val clockUseFallbackMask: Boolean) : Hook {
                 if (!calendars.contains(info.packageName)) return@after
                 val dayOffset = Calendar.getInstance().get(Calendar.DAY_OF_MONTH) - 1
                 val originalResult = result ?: return@after
-                result =
-                  when (originalResult) {
-                    is String -> "$originalResult $dayOffset"
-                    // PersistedItemState: call withAdditionalValues to append the day
-                    else ->
-                      originalResult.javaClass
-                        .method(
-                          "withAdditionalValues",
-                          Array<String>::class.java,
-                        )
-                        ?.invoke(originalResult, arrayOf(dayOffset.toString())) ?: originalResult
-                  }
+                result = calendarStateWithDay(originalResult, dayOffset)
               }
             }
             .registerToScopeOrFail()

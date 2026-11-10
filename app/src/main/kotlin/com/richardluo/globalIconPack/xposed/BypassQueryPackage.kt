@@ -6,6 +6,7 @@ import com.richardluo.globalIconPack.utils.WorldPreference
 import com.richardluo.globalIconPack.utils.allMethods
 import com.richardluo.globalIconPack.utils.classOf
 import com.richardluo.globalIconPack.utils.hookCompat
+import com.richardluo.globalIconPack.utils.Logger.logE
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModuleInterface
 
@@ -19,10 +20,13 @@ object BypassQueryPackage {
       ?.allMethods("shouldFilterApplication")
       ?.hookCompat {
         after {
-          if (result == false) return@after
-          val targetPkgSetting = args[3] ?: return@after
-          if (getPackageNameM.invoke(targetPkgSetting) == WorldPreference.get().get(Pref.ICON_PACK))
-            result = false
+           if (result !is Boolean || result == false) return@after
+           runCatching {
+             val target = args.getOrNull(3) ?: return@runCatching
+             if (!getPackageNameM.declaringClass.isInstance(target)) return@runCatching
+             if (getPackageNameM.invoke(target) == WorldPreference.get().get(Pref.ICON_PACK))
+               result = false
+           }.onFailure { logE(it) }
         }
       }
   }

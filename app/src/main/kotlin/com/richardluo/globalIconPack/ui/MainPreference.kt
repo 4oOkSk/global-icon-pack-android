@@ -46,6 +46,7 @@ import androidx.compose.material.icons.outlined.KeyOff
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.Merge
 import androidx.compose.material.icons.outlined.ModeNight
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PhotoSizeSelectSmall
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.SettingsBackupRestore
@@ -279,6 +280,15 @@ object MainPreference {
         onClick = { context.startActivity(Intent(context, IconPackMergerActivity::class.java)) },
         title = { TwoLineText(stringResource(R.string.general_mergeIconPack)) },
         summary = { TwoLineText(stringResource(R.string.general_mergeIconPack_summary)) },
+      )
+      spacer()
+      mySwitchPreference(
+        modifier = { Modifier.singlePreference(it) },
+        icon = { Icon(Icons.Outlined.Notifications, Pref.NOTIFICATION_ICONS.key) },
+        key = Pref.NOTIFICATION_ICONS.key,
+        defaultValue = Pref.NOTIFICATION_ICONS.def,
+        title = { TwoLineText(stringResource(R.string.general_notificationIcons)) },
+        summary = { TwoLineText(stringResource(R.string.general_notificationIcons_summary)) },
       )
     }
   }

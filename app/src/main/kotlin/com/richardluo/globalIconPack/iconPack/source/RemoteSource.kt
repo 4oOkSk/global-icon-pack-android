@@ -7,6 +7,7 @@ import android.database.Cursor
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.RemoteException
+import android.os.Looper
 import androidx.core.database.getIntOrNull
 import com.richardluo.globalIconPack.iconPack.IconPackDB.GetIconCol
 import com.richardluo.globalIconPack.iconPack.IconPackProvider
@@ -123,12 +124,20 @@ class RemoteSource(
       throw ProviderNotReady()
     }
 
-  override fun getId(cn: ComponentName) =
-    try {
+  // Even an existing client can block in query(). Do not wait on IPC or indexMap from
+  // binder callbacks or System UI's main thread; a later worker lookup can retry.
+  private fun mustDeferQuery() =
+    isInBinderCall() ||
+      (context.packageName == "com.android.systemui" && Looper.myLooper() == Looper.getMainLooper())
+
+  override fun getId(cn: ComponentName): Int? {
+    if (mustDeferQuery()) return null
+    return try {
       getIdOrThrow(acquireClient(), cn)
     } catch (_: ProviderNotReady) {
       null
     }
+  }
 
   private fun getIdOrThrow(client: ContentProviderClient, cn: ComponentName) =
     synchronized(indexMap) {
@@ -149,12 +158,14 @@ class RemoteSource(
       }
     }
 
-  override fun getId(cnList: List<ComponentName>) =
-    try {
+  override fun getId(cnList: List<ComponentName>): List<Int?> {
+    if (mustDeferQuery()) return List(cnList.size) { null }
+    return try {
       getIdOrThrow(acquireClient(), cnList)
     } catch (_: ProviderNotReady) {
       List(cnList.size) { null }
     }
+  }
 
   private fun getIdOrThrow(client: ContentProviderClient, cnList: List<ComponentName>) =
     synchronized(indexMap) {

@@ -77,7 +77,9 @@ class IconPackProvider : ContentProvider() {
 
 private inline fun <T> strictModeAllowThreadDiskReads(crossinline block: () -> T): T {
   val oldPolicy = StrictMode.allowThreadDiskReads()
-  val result = block()
-  StrictMode.setThreadPolicy(oldPolicy)
-  return result
+  return try {
+    block()
+  } finally {
+    StrictMode.setThreadPolicy(oldPolicy)
+  }
 }

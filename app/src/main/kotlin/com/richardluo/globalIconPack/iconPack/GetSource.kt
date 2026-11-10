@@ -2,6 +2,7 @@ package com.richardluo.globalIconPack.iconPack
 
 import android.content.ComponentCallbacks
 import android.content.res.Configuration
+import android.os.Looper
 import com.richardluo.globalIconPack.MODE_PROVIDER
 import com.richardluo.globalIconPack.MODE_SHARE
 import com.richardluo.globalIconPack.Pref
@@ -24,9 +25,12 @@ import kotlin.concurrent.thread
 
 @Volatile private var sc: Source? = null
 private val initializingAsync = AtomicBoolean(false)
+private val initializingSource = ThreadLocal.withInitial { false }
 
 context(xposed: XposedInterface)
 fun getSC(): Source? {
+  // Loading pack resources also constructs PackageItemInfo objects intercepted by ReplaceIcon.
+  if (initializingSource.get() == true) return null
   sc?.let {
     return it
   }
@@ -35,11 +39,15 @@ fun getSC(): Source? {
   // system's notifyContentProviderPublishStatus() is queued behind that call, so the wait never
   // ends and the process freezes for 20s (a SystemUI ANR on every boot). Initialize in the
   // background instead and skip this call.
-  if (isInBinderCall()) {
+  if (
+    isInBinderCall() ||
+      (ActivityThread.currentPackageName() == "com.android.systemui" &&
+        Looper.myLooper() == Looper.getMainLooper())
+  ) {
     if (initializingAsync.compareAndSet(false, true))
       thread(name = "GIP-InitSource") {
         try {
-          synchronized(Source::class) { if (sc == null) initSC() }
+          synchronized(Source::class) { if (sc == null) initSCGuarded() }
         } finally {
           initializingAsync.set(false)
         }
@@ -48,10 +56,20 @@ fun getSC(): Source? {
   }
   synchronized(Source::class) {
     if (sc == null) {
-      initSC()
+      initSCGuarded()
     }
   }
   return sc
+}
+
+context(xposed: XposedInterface)
+private fun initSCGuarded() {
+  initializingSource.set(true)
+  try {
+    runCatching { initSC() }.onFailure { logE(it) }
+  } finally {
+    initializingSource.set(false)
+  }
 }
 
 context(xposed: XposedInterface)
@@ -80,7 +98,7 @@ private fun initSC() {
     context.registerComponentCallbacks(
       object : ComponentCallbacks {
         override fun onConfigurationChanged(newConfig: Configuration) {
-          sc?.updateResources()
+          runCatching { sc?.updateResources() }.onFailure { logE(it) }
         }
 
         @Deprecated("Deprecated in Java") override fun onLowMemory() {}

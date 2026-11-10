@@ -19,7 +19,7 @@ reorderable = { module = "sh.calvin.reorderable:reorderable", version = "3.1.0" 
 ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview", version = "1.12.1" }
 ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling", version = "1.12.1" }
 
-#junit = { group = "junit", name = "junit", version.ref = "junit" }
+junit = { group = "junit", name = "junit", version = "4.13.2" }
 #ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 #espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 

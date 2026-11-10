@@ -1,0 +1,69 @@
+# Fork maintenance
+
+## Notification icons
+
+Select a pack in Global Icon Pack, enable **Notification icons** in General, select **System UI**
+in the module's LSPosed scope, then restart System UI. The option defaults to off and is read
+when System UI starts. Restart System UI after changing the pack, variants or this option.
+
+The selected pack's application mapping supplies the status bar notification small icon and
+the small icon in standard notification headers. Share and provider modes use the saved
+application variant; local mode uses the pack's application mapping. System UI keeps its
+normal tint, light/dark and AOD behavior. Adaptive icons use their monochrome layer when
+available, otherwise their foreground. Transparent or monochrome packs produce the clearest
+silhouettes; opaque artwork can appear as a solid shape.
+
+Status bar replacement requires Android 9 or later and the displayed resource icon to match the notification's
+small icon. Conversation avatars, battery/network symbols, large icons and custom notification
+layouts retain their own rendering. Missing mappings, unsupported hook signatures and load
+failures preserve the original icon. The notification payload remains unchanged.
+
+The status view supports both `updateDrawable()` and `updateDrawable(boolean)`. Its drawing
+callers are deoptimized so optimized System UI builds still pass through the icon hook.
+
+System UI's main thread and Binder callbacks only request background loads. Status bar views
+refresh when their icon is ready. A standard header built on those threads keeps its original
+icon until it is rebound; background header inflation can load directly. A provider unavailable
+during early boot is retried on a later request.
+
+## Android 17 behavior
+
+Icon resource markers are applied only in client processes. The `android` package keeps the
+system-server permission hooks without installing client resource/parcel hooks. Optional hook
+registration failures are logged independently. Notification callbacks retain the system result
+when module work fails.
+
+Source initialization guards against reentry while pack resources create package-info objects.
+System UI initializes its source outside the main thread. Provider mapping lookups from Binder
+callbacks and System UI's main thread return no mapping rather than waiting for IPC or a mapping
+lock. Worker lookups can retry. The resource-replacement thread flag and provider disk-read
+policy are restored even after an exception. Forced monochrome rendering obtains `Resources`
+from either the resource receiver or the current application on the Android 17 package-manager
+path. Calendar state updates preserve unknown or incompatible launcher state types.
+
+## Builds and checks
+
+Use JDK 21, Android SDK platform 37 and the checked-in Gradle wrapper. The build tasks are:
+
+```sh
+./gradlew :app:assembleDebugApp :app:testDebugUnitTest :app:lintDebugApp
+./gradlew :app:assembleRelease
+```
+
+The `debugApp` build uses package ID `com.richardluo.globalIconPack.fork` so it can be installed
+alongside upstream. Enable only one module for a target process when testing. Debug builds use
+the Android debug key and need no `keystore.properties`. Release builds are
+unsigned unless that ignored file provides `storeFile`, `storePassword`, `keyAlias` and
+`keyPassword`. A signed fork cannot update an installed upstream APK with a different signing
+certificate. Preserve any settings you need before switching installations.
+
+JVM tests cover legacy strings, current persisted calendar state, unknown types, incompatible
+return values and throwing implementations. Compilation and these tests do not establish
+bootloop safety on a device. Device verification must use a verified Android 17 framework and
+a compatible LSPosed implementation, with logs from System UI, the launcher and system_server.
+
+On the device, verify boot completion, notification posting/updating/removal, missing pack
+mappings, conversation avatars, standard/custom headers, lock screen/AOD and light/dark mode.
+Repeat with provider mode, including provider process death and notification arrival during
+startup. If System UI or the launcher repeatedly restarts, disable the module's affected scope
+through LSPosed and collect crash/ANR logs before enabling it again.

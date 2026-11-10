@@ -63,13 +63,13 @@
 
         <provider
             android:name=".iconPack.IconPackProvider"
-            android:authorities="com.richardluo.globalIconPack.IconPackProvider"
+            android:authorities="${applicationId}.IconPackProvider"
             android:directBootAware="true"
             android:exported="true"
             tools:ignore="ExportedContentProvider" />
         <provider
             android:name="io.github.libxposed.service.XposedProvider"
-            android:authorities="com.richardluo.globalIconPack.XposedService"
+            android:authorities="${applicationId}.XposedService"
             android:directBootAware="true"
             android:exported="true"
             tools:ignore="ExportedContentProvider"

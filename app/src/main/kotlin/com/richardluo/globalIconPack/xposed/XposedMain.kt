@@ -14,16 +14,21 @@ class XposedMain : XposedModule() {
   }
 
   override fun onSystemServerStarting(param: XposedModuleInterface.SystemServerStartingParam) {
-    BypassShortcutPermission.onHookSystem(param)
-    BypassQueryPackage.onHookSystem(param)
-    BypassCrossUserPermission.onHookSystem(param)
+    runCatching { BypassShortcutPermission.onHookSystem(param) }.onFailure { Logger.logE(it) }
+    runCatching { BypassQueryPackage.onHookSystem(param) }.onFailure { Logger.logE(it) }
+    runCatching { BypassCrossUserPermission.onHookSystem(param) }.onFailure { Logger.logE(it) }
   }
 
   override fun onPackageReady(param: XposedModuleInterface.PackageReadyParam) {
-    if (!param.isFirstPackage) return
-    if (param.packageName == BuildConfig.APPLICATION_ID) return
+    runCatching { hookPackage(param) }.onFailure { Logger.logE(it) }
+  }
 
-    val pref = WorldPreference.get()
+  private fun hookPackage(param: XposedModuleInterface.PackageReadyParam) {
+    if (!param.isFirstPackage) return
+    // Resource-id markers must stay in client processes, never in system_server's parcelables.
+    if (param.packageName == BuildConfig.APPLICATION_ID || param.packageName == "android") return
+
+    val pref = runCatching { WorldPreference.get() }.getOrElse { Logger.logE(it); return }
     val hookList =
       listOfNotNull(
         ReplaceIcon(
@@ -38,14 +43,21 @@ class XposedMain : XposedModule() {
           CalendarAndClockHook(pref.get(Pref.CLOCK_USE_FALLBACK_MASK))
         else null,
         if (pref.get(Pref.RELOAD_ICON_ON_THEME_CHANGE)) ReloadIconOnThemeChange() else null,
+        if (pref.get(Pref.NOTIFICATION_ICONS)) NotificationIcons() else null,
       )
-    hookList.forEach { it.onHookApp(param) }
+    hookList.forEach { runCatching { it.onHookApp(param) }.onFailure { Logger.logE(it) } }
     when (param.packageName) {
       "com.android.launcher3",
       Pref.PIXEL_LAUNCHER_PACKAGE.def,
-      pref.get(Pref.PIXEL_LAUNCHER_PACKAGE) -> hookList.forEach { it.onHookPixelLauncher(param) }
-      "com.android.systemui" -> hookList.forEach { it.onHookSystemUI(param) }
-      "com.android.settings" -> hookList.forEach { it.onHookSettings(param) }
+      pref.get(Pref.PIXEL_LAUNCHER_PACKAGE) -> hookList.forEach {
+        runCatching { it.onHookPixelLauncher(param) }.onFailure { Logger.logE(it) }
+      }
+      "com.android.systemui" -> hookList.forEach {
+        runCatching { it.onHookSystemUI(param) }.onFailure { Logger.logE(it) }
+      }
+      "com.android.settings" -> hookList.forEach {
+        runCatching { it.onHookSettings(param) }.onFailure { Logger.logE(it) }
+      }
     }
   }
 }

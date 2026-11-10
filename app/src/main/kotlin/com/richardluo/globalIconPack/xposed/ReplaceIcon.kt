@@ -15,6 +15,7 @@ import android.content.pm.ProviderInfo
 import android.content.pm.ResolveInfo
 import android.content.pm.ServiceInfo
 import android.content.pm.ShortcutInfo
+import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.AdaptiveIconDrawable
@@ -28,6 +29,7 @@ import com.richardluo.globalIconPack.iconPack.getSC
 import com.richardluo.globalIconPack.iconPack.source.Source
 import com.richardluo.globalIconPack.iconPack.source.getComponentName
 import com.richardluo.globalIconPack.reflect.ApplicationPackageManager
+import com.richardluo.globalIconPack.reflect.ActivityThread
 import com.richardluo.globalIconPack.reflect.BaseIconFactory
 import com.richardluo.globalIconPack.reflect.Resources.getDrawableForDensityM
 import com.richardluo.globalIconPack.utils.HookBuilder
@@ -154,8 +156,10 @@ class ReplaceIcon(
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     drawable is AdaptiveIconDrawable
                 )
-                  drawable.monochrome?.let {
-                    drawable = MonochromeDrawable(thisObject.asType()!!, it)
+                  drawable.monochrome?.let { mono ->
+                    val resources =
+                      (thisObject as? Resources) ?: ActivityThread.currentApplication()?.resources
+                    if (resources != null) drawable = MonochromeDrawable(resources, mono)
                   }
 
                 drawable?.let { getSC()?.genIconFrom(it) ?: it }
@@ -313,15 +317,19 @@ class ReplaceIcon(
       before {
         runBlockReplaceIconResId {
           val sc = getSC() ?: return@runBlockReplaceIconResId
-          result = proceed()
-          val list = mListF.getAs<List<Any?>?>(thisObject) ?: return@runBlockReplaceIconResId
-          val curReplacer =
-            replacer.get()
-              ?: batchReplacerMap[list.getOrNull(0)?.javaClass?.field("CREATOR")?.getAs()]
-              ?: return@runBlockReplaceIconResId
-          curReplacer(list.asSequence(), sc)
           replacer.set(null)
-          logD("Batch replaced ParceledListSlice: " + list.size)
+          try {
+            result = proceed()
+            val list = mListF.getAs<List<Any?>?>(thisObject) ?: return@runBlockReplaceIconResId
+            val curReplacer =
+              replacer.get()
+                ?: batchReplacerMap[list.getOrNull(0)?.javaClass?.field("CREATOR")?.getAs()]
+                ?: return@runBlockReplaceIconResId
+            curReplacer(list.asSequence(), sc)
+            logD("Batch replaced ParceledListSlice: " + list.size)
+          } finally {
+            replacer.remove()
+          }
         }
       }
     }
@@ -360,9 +368,13 @@ private val replacingIcon = ThreadLocal.withInitial { false }
 
 private inline fun runBlockReplaceIconResId(crossinline block: () -> Unit) {
   if (blockReplaceIconResId.get() == true) return
+  val previous = blockReplaceIconResId.get()
   blockReplaceIconResId.set(true)
-  block()
-  blockReplaceIconResId.set(false)
+  try {
+    block()
+  } finally {
+    blockReplaceIconResId.set(previous)
+  }
 }
 
 context(xposed: XposedInterface)

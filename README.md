@@ -3,6 +3,10 @@
 # Global Icon Pack
 An Xposed module for applying icon packs globally
 
+This fork is maintained at [4oOkSk/global-icon-pack-android](https://github.com/4oOkSk/global-icon-pack-android),
+on branch `connecat/android17-notification-icons`. Upstream is [RichardLuo0/global-icon-pack-android](https://github.com/RichardLuo0/global-icon-pack-android).
+Fork behavior, builds and device checks are documented in [docs/fork.md](docs/fork.md).
+
 ![GitHub Repo stars](https://img.shields.io/github/stars/RichardLuo0/global-icon-pack-android?style=for-the-badge&color=%23FF9800)
 ![IzzyOnDroid](https://img.shields.io/endpoint?url=https://apt.izzysoft.de/fdroid/api/v1/shield/com.richardluo.globalIconPack&style=for-the-badge&color=%234CAF50)
 
