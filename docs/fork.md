@@ -8,10 +8,11 @@ when System UI starts. Restart System UI after changing the pack, variants or th
 
 The selected pack's application mapping supplies the status bar notification small icon and
 the small icon in standard notification headers. Share and provider modes use the saved
-application variant; local mode uses the pack's application mapping. System UI keeps its
-normal tint, light/dark and AOD behavior. Adaptive icons use their monochrome layer when
-available, otherwise their foreground. Transparent or monochrome packs produce the clearest
-silhouettes; opaque artwork can appear as a solid shape.
+application variant; local mode uses the pack's application mapping. Icons retain the pack's
+colors, including the background and foreground of adaptive icons. Replacement status icons
+ignore silhouette tint while awake and accept System UI's filters during doze/AOD. Standard
+headers opt out of monochrome coloring. Android 17's notification row app-icon provider also
+uses the selected pack when its supported hook is available.
 
 Status bar replacement requires Android 9 or later and the displayed resource icon to match the notification's
 small icon. Conversation avatars, battery/network symbols, large icons and custom notification
@@ -25,6 +26,10 @@ System UI's main thread and Binder callbacks only request background loads. Stat
 refresh when their icon is ready. A standard header built on those threads keeps its original
 icon until it is rebound; background header inflation can load directly. A provider unavailable
 during early boot is retried on a later request.
+
+Pending status-icon refreshes are coalesced per view and hold views weakly. The bitmap cache
+includes the local date, so a calendar icon is reloaded on its next request after the date changes.
+Resource lookup caches support concurrent notification workers and configuration refreshes.
 
 ## Android 17 behavior
 

@@ -1,7 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <string name="appName">Global Icon Pack</string>
     <string name="general_notificationIcons">Notification icons</string>
-    <string name="general_notificationIcons_summary">Use the selected pack for notification small icons in the status bar and standard notification headers. Enable System UI in LSPosed and restart it after changing this option. Transparent or monochrome packs work best.</string>
+    <string name="general_notificationIcons_summary">Show full-color icons from the selected pack in the status bar and standard notification headers. Enable System UI in LSPosed and restart it after changing the pack or this option.</string>
 
     <string name="warn_enableModule">Please ensure the Xposed module has been enabled first.</string>
     <string name="info_iconPackApplied">Icon pack has been applied. Please click "Restart XXX" manually.</string>

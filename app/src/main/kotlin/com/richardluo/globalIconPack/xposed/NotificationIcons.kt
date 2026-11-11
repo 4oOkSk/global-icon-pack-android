@@ -2,10 +2,11 @@ package com.richardluo.globalIconPack.xposed
 
 import android.app.Notification
 import android.content.Context
+import android.content.res.ColorStateList
+import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.drawable.AdaptiveIconDrawable
+import android.graphics.ColorFilter
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Icon
 import android.os.Build
@@ -27,15 +28,22 @@ import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModuleInterface
 import java.lang.ref.WeakReference
 import java.lang.reflect.Modifier
+import java.time.LocalDate
+import java.util.WeakHashMap
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
 /** Replaces presentation only; the app's notification and its small Icon stay intact. */
 class NotificationIcons : Hook {
-  private data class Key(val packageName: String, val density: Int, val configuration: String)
+  private data class Key(
+    val packageName: String,
+    val density: Int,
+    val configuration: String,
+    val day: LocalDate,
+  )
 
   private val cache = LruCache<Key, Bitmap>(64)
-  private val pending = mutableMapOf<Key, MutableList<() -> Unit>>()
+  private val pending = mutableMapOf<Key, WeakHashMap<View, () -> Unit>>()
   private val loader = Executors.newSingleThreadExecutor { task -> Thread(task, "GIP-Notification") }
 
   context(xposed: XposedInterface)
@@ -43,6 +51,7 @@ class NotificationIcons : Hook {
     // Each entry point is optional: OEMs can change one without disabling the other.
     runCatching { hookStatusBar(param) }.onFailure { logE(it) }
     runCatching { hookHeader() }.onFailure { logE(it) }
+    runCatching { hookRowAppIcon(param) }.onFailure { logE(it) }
   }
 
   context(xposed: XposedInterface)
@@ -51,6 +60,7 @@ class NotificationIcons : Hook {
     val clazz = classOf("com.android.systemui.statusbar.StatusBarIconView", param) ?: return
     val notification = clazz.field("mNotification") ?: return
     val conversation = clazz.field("mShowsConversation") ?: return
+    val doze = clazz.field("mDozeAmount")
     val statusIcon = classOf("com.android.internal.statusbar.StatusBarIcon")?.field("icon") ?: return
     // Optimized SystemUI builds can retain only the boolean overload.
     val refresh = runCatching { clazz.getDeclaredMethod("updateDrawable") }.getOrElse {
@@ -76,7 +86,7 @@ class NotificationIcons : Hook {
             shown.resId != small.resId || shown.resPackage != small.resPackage) return@runCatching
           val reference = WeakReference(view)
           val notificationKey = sbn.key
-          val bitmap = bitmap(view.context, sbn.packageName) {
+          val bitmap = bitmap(view.context, sbn.packageName, view) {
             reference.get()?.let { target ->
               target.post {
                 runCatching {
@@ -89,7 +99,15 @@ class NotificationIcons : Hook {
               }
             }
           }
-          if (bitmap != null) result = BitmapDrawable(view.resources, bitmap)
+          if (bitmap != null) {
+            // Keep the policy on this drawable: recycled views and conversation avatars never
+            // inherit a disabled tint. SystemUI still supplies its normal filters during doze.
+            result = ColorIconDrawable(view.resources, bitmap) {
+              runCatching {
+                reference.get()?.let { doze?.getFloat(it)?.let { amount -> amount > 0f } }
+              }.getOrNull() ?: true
+            }
+          }
         }.onFailure { logE(it) }
       }
     }
@@ -117,6 +135,12 @@ class NotificationIcons : Hook {
           val views = args[0] as? RemoteViews ?: return@runCatching
           val icon = bitmap(appContext, appContext.packageName) ?: return@runCatching
           views.setImageViewBitmap(android.R.id.icon, icon)
+          // CachingIconView's NO_COLOR sentinel. bindSmallIcon has already appended its
+          // monochrome color action; the final action must opt out for the replacement.
+          views.setInt(android.R.id.icon, "setOriginalIconColor", 1)
+          if (Build.VERSION.SDK_INT >= 31) {
+            views.setColorStateList(android.R.id.icon, "setImageTintList", null)
+          }
         }.onFailure { logE(it) }
       }
     }
@@ -124,25 +148,61 @@ class NotificationIcons : Hook {
   }
 
   context(xposed: XposedInterface)
-  private fun bitmap(context: Context, packageName: String, onReady: (() -> Unit)? = null): Bitmap? {
+  private fun hookRowAppIcon(param: XposedModuleInterface.PackageReadyParam) {
+    // Android 17 can obtain an app icon independently of the RemoteViews small icon.
+    val clazz = classOf(
+      "com.android.systemui.statusbar.notification.row.icon." +
+        "NotificationRowIconViewInflaterFactory\$createIconProvider\$2", param,
+    ) ?: return
+    val context = clazz.field("\$context") ?: return
+    val notification = clazz.field("\$sbn") ?: return
+    val launcherIcon = clazz.getDeclaredMethod("getLauncherIcon").apply { isAccessible = true }
+    launcherIcon.hookCompat {
+      after {
+        runCatching {
+          val appContext = context.get(thisObject) as? Context ?: return@runCatching
+          val sbn = notification.get(thisObject) as? StatusBarNotification ?: return@runCatching
+          val icon = bitmap(appContext, sbn.packageName) ?: return@runCatching
+          result = ColorIconDrawable(appContext.resources, icon)
+        }.onFailure { logE(it) }
+      }
+    }
+    // The framework may inline this tiny interface implementation at either load entry point.
+    classOf("com.android.internal.widget.NotificationRowIconView")?.declaredMethods?.filter {
+      it.name in setOf("loadAppIcon", "setImageIcon", "setImageIconAsync")
+    }?.forEach { it.deoptimize() }
+    logD("Notification row app icon hook: $launcherIcon")
+  }
+
+  context(xposed: XposedInterface)
+  private fun bitmap(
+    context: Context,
+    packageName: String,
+    target: View? = null,
+    onReady: (() -> Unit)? = null,
+  ): Bitmap? {
     val res = context.resources
-    val key = Key(packageName, res.displayMetrics.densityDpi, res.configuration.toString())
+    val key = Key(packageName, res.displayMetrics.densityDpi, res.configuration.toString(), LocalDate.now())
     cache.get(key)?.let { return it }
     // Header inflation normally runs on a worker. Main/binder callers only schedule a load.
     if (Looper.myLooper() != Looper.getMainLooper() && !isInBinderCall()) {
       return load(context, key)
     }
     synchronized(pending) {
+      // A load can finish between the first cache read and acquiring this lock.
+      cache.get(key)?.let { return it }
       pending[key]?.let {
-        if (onReady != null) it.add(onReady)
+        if (target != null && onReady != null) it[target] = onReady
         return null
       }
-      pending[key] = mutableListOf<() -> Unit>().apply { if (onReady != null) add(onReady) }
+      pending[key] = WeakHashMap<View, () -> Unit>().apply {
+        if (target != null && onReady != null) put(target, onReady)
+      }
     }
     val appContext = context.applicationContext ?: context
     loader.execute {
       val loaded = load(appContext, key)
-      val callbacks = synchronized(pending) { pending.remove(key).orEmpty() }
+      val callbacks = synchronized(pending) { pending.remove(key)?.values?.toList().orEmpty() }
       if (loaded != null) callbacks.forEach { runCatching(it).onFailure { logE(it) } }
     }
     return null
@@ -153,13 +213,8 @@ class NotificationIcons : Hook {
     cache.get(key)?.let { return@runCatching it }
     val source = getSC() ?: return@runCatching null
     val entry = source.getIconEntry(getComponentName(key.packageName)) ?: return@runCatching null
-    var drawable = source.getIconNotAdaptive(entry, key.density) ?: return@runCatching null
-    if (drawable is AdaptiveIconDrawable) {
-      drawable =
-        (if (Build.VERSION.SDK_INT >= 33) drawable.monochrome else null) ?: drawable.foreground
-    }
-    drawable = (drawable.constantState?.newDrawable(context.resources) ?: drawable).mutate()
-    drawable.setTint(Color.WHITE)
+    val original = source.getIconNotAdaptive(entry, key.density) ?: return@runCatching null
+    val drawable = (original.constantState?.newDrawable(context.resources) ?: original).mutate()
     val size = (24 * key.density / 160f).roundToInt().coerceIn(1, 128)
     Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also {
       it.density = key.density
@@ -168,4 +223,16 @@ class NotificationIcons : Hook {
       cache.put(key, it)
     }
   }.onFailure { logE(it) }.getOrNull()
+}
+
+/** Ignore silhouette tint only for artwork supplied by the pack. */
+private class ColorIconDrawable(
+  resources: Resources,
+  bitmap: Bitmap,
+  private val useSystemFilter: () -> Boolean = { false },
+) : BitmapDrawable(resources, bitmap) {
+  override fun setTintList(tint: ColorStateList?) = super.setTintList(null)
+
+  override fun setColorFilter(colorFilter: ColorFilter?) =
+    super.setColorFilter(if (useSystemFilter()) colorFilter else null)
 }

@@ -31,6 +31,7 @@ import com.richardluo.globalIconPack.utils.method
 import io.github.libxposed.api.XposedInterface
 import java.lang.reflect.Method
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 
 private var waitingForBootCompleted = true
 
@@ -56,7 +57,7 @@ class RemoteSource(
   // for why a binder thread must never wait for that.
   @Volatile private var client: ContentProviderClient? = null
   private val clientLock = Any()
-  private val resourcesMap = mutableMapOf<String, ResourceOwner>()
+  private val resourcesMap = ConcurrentHashMap<String, ResourceOwner>()
 
   private val fallbackOwner: FallbackOwner
 

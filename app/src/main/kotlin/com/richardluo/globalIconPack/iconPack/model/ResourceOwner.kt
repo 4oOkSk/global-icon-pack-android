@@ -5,10 +5,11 @@ import android.app.Application
 import android.graphics.drawable.Drawable
 import com.richardluo.globalIconPack.reflect.Resources
 import io.github.libxposed.api.XposedInterface
+import java.util.concurrent.ConcurrentHashMap
 
 open class ResourceOwner(val context: Application, protected val pack: String) {
-  protected var res = context.packageManager.getResourcesForApplication(pack)
-  private val idCache = mutableMapOf<String, Int>()
+  @Volatile protected var res = context.packageManager.getResourcesForApplication(pack)
+  private val idCache = ConcurrentHashMap<String, Int>()
 
   @SuppressLint("DiscouragedApi")
   fun getIdByName(name: String): Int =
