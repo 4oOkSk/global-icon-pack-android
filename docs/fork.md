@@ -38,16 +38,23 @@ system-server permission hooks without installing client resource/parcel hooks. 
 registration failures are logged independently. Notification callbacks retain the system result
 when module work fails.
 
-Source initialization guards against reentry while pack resources create package-info objects.
-System UI initializes its source outside the main thread. Provider mapping lookups from Binder
+Source initialization runs outside the main thread of every hooked process, including secondary
+application processes. Concurrent or recursive callers keep their native icons while one source
+is loading; they never wait on an initialization lock. Failed or unavailable sources retry on a
+later request after a five-second cooldown. Generic parcelled lists initialize the source only
+when they contain supported icon-bearing types; process exit history and other unrelated lists
+pass through without requesting a source. Provider mapping lookups from Binder
 callbacks and System UI's main thread return no mapping rather than waiting for IPC or a mapping
 lock. Worker lookups can retry. The resource-replacement thread flag and provider disk-read
 policy are restored even after an exception. Forced monochrome rendering obtains `Resources`
 from either the resource receiver or the current application on the Android 17 package-manager
 path. Calendar state updates preserve unknown or incompatible launcher state types.
 
-Theme resource refresh skips recursive requests while rebuilding fallback drawables. A failed
-refresh leaves the resource version unchanged so a later request can retry.
+Theme resource refresh skips recursive and concurrent requests while rebuilding fallback
+drawables, allowing other callers to use the last published fallback without waiting on the
+refresh worker. A failed refresh leaves the resource version unchanged so a later request can
+retry. A newer configuration arriving during a rebuild is picked up on a subsequent request.
+Shared and provider resource lookup maps support concurrent reads and invalidation.
 
 ## Builds and checks
 
@@ -65,9 +72,14 @@ unsigned unless that ignored file provides `storeFile`, `storePassword`, `keyAli
 `keyPassword`. A signed fork cannot update an installed upstream APK with a different signing
 certificate. Preserve any settings you need before switching installations.
 
+`version.properties` retains the upstream major/minor/patch version. `forkRevision` appends
+`-fork.N` to the app version and `forkVersionCode` supplies a monotonically increasing update
+code for the fork APK.
+
 JVM tests cover legacy strings, current persisted calendar state, unknown types, incompatible
-return values, throwing implementations, recursive fallback refresh and retry after refresh
-failure. Compilation and these tests do not establish
+return values, throwing implementations, recursive/concurrent fallback refresh, deferred source
+initialization, concurrent/reentrant callers, failure cooldown and retry after resource or
+executor failure. Compilation and these tests do not establish
 bootloop safety on a device. Device verification must use a verified Android 17 framework and
 a compatible LSPosed implementation, with logs from System UI, the launcher and system_server.
 

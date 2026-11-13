@@ -25,6 +25,7 @@ import com.richardluo.globalIconPack.utils.ThemeColorMonitor
 import com.richardluo.globalIconPack.utils.getOrPut
 import io.github.libxposed.api.XposedInterface
 import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 
 class ShareSource(
   context: Application,
@@ -49,7 +50,7 @@ class ShareSource(
         SQLiteDatabase.OPEN_READONLY,
       )
     }
-  private val resourcesMap = mutableMapOf<String, ResourceOwner>()
+  private val resourcesMap = ConcurrentHashMap<String, ResourceOwner>()
 
   private val fallbackOwner: FallbackOwner
 

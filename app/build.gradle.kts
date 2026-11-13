@@ -27,8 +27,8 @@ extensions.configure<ApplicationExtension> {
     applicationId = "com.richardluo.globalIconPack"
     minSdk = 27
     targetSdk = 37
-    versionCode = major * 10000 + minor * 100 + patch
-    versionName = "$major.$minor.$patch"
+    versionCode = versionProps.getProperty("forkVersionCode", "${major * 10000 + minor * 100 + patch}").toInt()
+    versionName = "$major.$minor.$patch" + versionProps.getProperty("forkRevision")?.let { "-fork.$it" }.orEmpty()
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

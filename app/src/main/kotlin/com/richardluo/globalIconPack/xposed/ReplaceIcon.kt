@@ -316,7 +316,6 @@ class ReplaceIcon(
     baseParceledListSlice.allConstructors().hookCompat {
       before {
         runBlockReplaceIconResId {
-          val sc = getSC() ?: return@runBlockReplaceIconResId
           replacer.set(null)
           try {
             result = proceed()
@@ -325,6 +324,9 @@ class ReplaceIcon(
               replacer.get()
                 ?: batchReplacerMap[list.getOrNull(0)?.javaClass?.field("CREATOR")?.getAs()]
                 ?: return@runBlockReplaceIconResId
+            // ParceledListSlice also carries unrelated data, e.g. process exit history during
+            // app startup. Only initialize the icon source after identifying an icon-bearing type.
+            val sc = getSC() ?: return@runBlockReplaceIconResId
             curReplacer(list.asSequence(), sc)
             logD("Batch replaced ParceledListSlice: " + list.size)
           } finally {

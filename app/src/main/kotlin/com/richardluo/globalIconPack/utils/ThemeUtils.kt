@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.res.Configuration
 import android.os.Build
 import com.richardluo.globalIconPack.reflect.Resources
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class ThemeSig(val night: Int, val seq: Int)
 
@@ -22,21 +23,19 @@ class ThemeColorMonitor internal constructor(private val readAssetsSeq: () -> In
   })
 
   @Volatile private var assetsSeq: Int? = readAssetsSeq()
-  private var updating = false
+  private val updating = AtomicBoolean(false)
 
   fun update(doUpdate: () -> Unit) {
     val newAssetsSeq = readAssetsSeq()
-    if (assetsSeq == newAssetsSeq) return
-    synchronized(this) {
-      // Rebuilding fallback drawables loads icons through this same monitor.
-      if (updating || assetsSeq == newAssetsSeq) return
-      updating = true
-      try {
-        doUpdate()
-        assetsSeq = newAssetsSeq
-      } finally {
-        updating = false
-      }
+    if (assetsSeq == newAssetsSeq || !updating.compareAndSet(false, true)) return
+    // A worker rebuilding resources can need Android locks held by a calling main/binder
+    // thread. Never make that caller wait; it can use the last published fallback meanwhile.
+    try {
+      if (assetsSeq == newAssetsSeq) return
+      doUpdate()
+      assetsSeq = newAssetsSeq
+    } finally {
+      updating.set(false)
     }
   }
 }

@@ -3,6 +3,7 @@ package com.richardluo.globalIconPack.iconPack
 import android.content.ComponentCallbacks
 import android.content.res.Configuration
 import android.os.Looper
+import android.os.SystemClock
 import com.richardluo.globalIconPack.MODE_PROVIDER
 import com.richardluo.globalIconPack.MODE_SHARE
 import com.richardluo.globalIconPack.Pref
@@ -17,93 +18,62 @@ import com.richardluo.globalIconPack.iconPack.source.Source
 import com.richardluo.globalIconPack.reflect.ActivityThread
 import com.richardluo.globalIconPack.utils.Logger.log
 import com.richardluo.globalIconPack.utils.Logger.logE
+import com.richardluo.globalIconPack.utils.RetryingInitializer
 import com.richardluo.globalIconPack.utils.WorldPreference
 import com.richardluo.globalIconPack.utils.isInBinderCall
 import io.github.libxposed.api.XposedInterface
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
-@Volatile private var sc: Source? = null
-private val initializingAsync = AtomicBoolean(false)
-private val initializingSource = ThreadLocal.withInitial { false }
+private val source = RetryingInitializer<Source>(
+  nowMillis = SystemClock::uptimeMillis,
+  execute = { task -> thread(name = "GIP-InitSource") { task.run() } },
+)
 
 context(xposed: XposedInterface)
 fun getSC(): Source? {
-  // Loading pack resources also constructs PackageItemInfo objects intercepted by ReplaceIcon.
-  if (initializingSource.get() == true) return null
-  sc?.let {
-    return it
-  }
-  // Creating a source may wait for IconPackProvider's process to start. A binder thread must not
-  // wait for it (or for the lock below): if it is handling a oneway call to ApplicationThread, the
-  // system's notifyContentProviderPublishStatus() is queued behind that call, so the wait never
-  // ends and the process freezes for 20s (a SystemUI ANR on every boot). Initialize in the
-  // background instead and skip this call.
-  if (
-    isInBinderCall() ||
-      (ActivityThread.currentPackageName() == "com.android.systemui" &&
-        Looper.myLooper() == Looper.getMainLooper())
+  // Framework constructors run before the Application exists; that is not a failed load.
+  val context = ActivityThread.currentApplication() ?: return null
+  // XML can block on incremental APK reads even in local mode. This applies to every
+  // hooked application's main thread, including secondary processes during Application.onCreate.
+  // Binder callbacks must also return so provider publication can be delivered. Reentrant and
+  // concurrent callers keep their native icons while one initializer is running.
+  return source.get(
+    defer = isInBinderCall() || Looper.myLooper() == Looper.getMainLooper(),
+    onFailure = { logE(it) },
   ) {
-    if (initializingAsync.compareAndSet(false, true))
-      thread(name = "GIP-InitSource") {
-        try {
-          synchronized(Source::class) { if (sc == null) initSCGuarded() }
-        } finally {
-          initializingAsync.set(false)
-        }
-      }
-    return null
+    initSC(context)
   }
-  synchronized(Source::class) {
-    if (sc == null) {
-      initSCGuarded()
+}
+
+context(xposed: XposedInterface)
+private fun initSC(context: android.app.Application): Source? {
+  val pref = WorldPreference.get()
+  val pack = pref.get(Pref.ICON_PACK)
+  val config = IconPackConfig(pref)
+  val sc =
+    if (pack.isEmpty()) {
+      log("No icon pack is set")
+      EmptySource()
+    } else
+      when (pref.get(Pref.MODE)) {
+        MODE_SHARE -> ShareSource(context, xposed, pack, config)
+        MODE_PROVIDER ->
+          try {
+            RemoteSource(context, xposed, pack, config)
+          } catch (e: BootNotCompleted) {
+            log(e.message.orEmpty())
+            return null
+          }
+        else -> LocalSource(context, xposed, pack, config)
+      }
+  context.registerComponentCallbacks(
+    object : ComponentCallbacks {
+      override fun onConfigurationChanged(newConfig: Configuration) {
+        runCatching { sc.updateResources() }.onFailure { logE(it) }
+      }
+
+      @Deprecated("Deprecated in Java") override fun onLowMemory() {}
     }
-  }
+  )
   return sc
-}
-
-context(xposed: XposedInterface)
-private fun initSCGuarded() {
-  initializingSource.set(true)
-  try {
-    runCatching { initSC() }.onFailure { logE(it) }
-  } finally {
-    initializingSource.set(false)
-  }
-}
-
-context(xposed: XposedInterface)
-private fun initSC() {
-  val context = ActivityThread.currentApplication() ?: return
-  runCatching {
-    val pref = WorldPreference.get()
-    val pack = pref.get(Pref.ICON_PACK)
-    val config = IconPackConfig(pref)
-    sc =
-      if (pack.isEmpty()) {
-        log("No icon pack is set")
-        EmptySource()
-      } else
-        when (pref.get(Pref.MODE)) {
-          MODE_SHARE -> ShareSource(context, xposed, pack, config)
-          MODE_PROVIDER ->
-            try {
-              RemoteSource(context, xposed, pack, config)
-            } catch (e: BootNotCompleted) {
-              log(e.message.orEmpty())
-              return
-            }
-          else -> LocalSource(context, xposed, pack, config)
-        }
-    context.registerComponentCallbacks(
-      object : ComponentCallbacks {
-        override fun onConfigurationChanged(newConfig: Configuration) {
-          runCatching { sc?.updateResources() }.onFailure { logE(it) }
-        }
-
-        @Deprecated("Deprecated in Java") override fun onLowMemory() {}
-      }
-    )
-  }
-    .onFailure { logE(it) }
 }

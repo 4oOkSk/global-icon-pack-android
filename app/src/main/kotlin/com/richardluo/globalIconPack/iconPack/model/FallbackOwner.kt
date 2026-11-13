@@ -7,7 +7,7 @@ class FallbackOwner(
   val fallbackSettings: FallbackSettings?,
   val getIcon: (String) -> Drawable?,
 ) {
-  var iconFallback: IconFallback? = null
+  @Volatile var iconFallback: IconFallback? = null
 
   init {
     rebuild()
