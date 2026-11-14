@@ -5,7 +5,8 @@ An Xposed module for applying icon packs globally
 
 This fork is maintained at [4oOkSk/global-icon-pack-android](https://github.com/4oOkSk/global-icon-pack-android),
 on branch `connecat/android17-notification-icons`. Upstream is [RichardLuo0/global-icon-pack-android](https://github.com/RichardLuo0/global-icon-pack-android).
-Fork behavior, builds and device checks are documented in [docs/fork.md](docs/fork.md).
+Build this fork using the [build instructions](docs/fork.md#builds-and-checks).
+Notification icon behavior, Android 17 support and device checks are documented in [docs/fork.md](docs/fork.md).
 
 ![GitHub Repo stars](https://img.shields.io/github/stars/RichardLuo0/global-icon-pack-android?style=for-the-badge&color=%23FF9800)
 ![IzzyOnDroid](https://img.shields.io/endpoint?url=https://apt.izzysoft.de/fdroid/api/v1/shield/com.richardluo.globalIconPack&style=for-the-badge&color=%234CAF50)
@@ -13,7 +14,9 @@ Fork behavior, builds and device checks are documented in [docs/fork.md](docs/fo
 Some launchers support icon packs, however the icons are usually inconsistent across the whole system. For example, the Settings page and the Recent Apps screen may retain the default icons.
 This module is designed to extend the icon packs throughout the entire system.
 
-[<img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png" alt="Get it on IzzyOnDroid" height="80">](https://apt.izzysoft.de/fdroid/index/apk/com.richardluo.globalIconPack)
+Upstream APK distribution:
+
+[<img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png" alt="Get the upstream APK on IzzyOnDroid" height="80">](https://apt.izzysoft.de/fdroid/index/apk/com.richardluo.globalIconPack)
 
 ## Preview
 <div>
@@ -27,11 +30,11 @@ This module is designed to extend the icon packs throughout the entire system.
 
 ## Requirements
 * LSPosed
-* Android 8.1+ (I tested on Android 14, 15. @Mickmick21 tested on Android 10, 12L. @kaislate tested on Android 13.)
+* Android 8.1+; notification status icons require Android 9+. Verify the target Android version, ROM and LSPosed combination using the [device checks](docs/fork.md#builds-and-checks).
 * Some features require AOSP-like OS
 
 ## Installation
-1. Install the apk. 
+1. Install the APK built from this fork. Package IDs and signing requirements are described in the [build instructions](docs/fork.md#builds-and-checks).
 2. Select apps in lsposed. It should work for most apps/launchers, depending on the api they use.
 3. Grant root permission.
 4. Open Global Icon Pack, choose an icon pack.
@@ -41,7 +44,7 @@ This module is designed to extend the icon packs throughout the entire system.
 ## Notes
 ### Modes
 * Use share mode whenever possible. The provider mode serves as a fallback if share mode doesn't work. Local mode is only reserved for testing and you can't use icon variants with this mode (However it maybe faster if there are only a few icon records).
-* If you are using share mode, after uninstallation, you must remove `/data/misc/com.richardluo.globalIconPack/iconPack.db` manually.
+* Share mode stores its database at `/data/misc/<application-id>/iconPack.db`. The release application ID is `com.richardluo.globalIconPack`; `debugApp` uses `com.richardluo.globalIconPack.fork`. After uninstalling a build, remove only the database belonging to that application ID.
 * Sometimes system update may reset the permissions of share mode database. It is recommended that you deselect apps in LSPosed, after the update, select them again, and open GIP at least once (to setup the permissions), then click each of `Restart xxx`.
 * System update may also break the splash screen. The icons on it may be so large that they appear to be clipped. Go to lsposed, locate System UI, long press it and select reoptimize, then restart System UI. The splash screen should return to normal.
 ### Tips
