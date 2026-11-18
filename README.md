@@ -59,7 +59,7 @@ Upstream APK distribution:
 * You can create a shortcut record by appending `@` to the end of package name, and shortcut id as classname.
 
 ## Known Issues
-* If share mode doesn't work properly, try to install [this magisk module](https://github.com/RichardLuo0/global-icon-pack-android/raw/refs/heads/master/GIP_FIX.zip) created by @Hanhanawa.
+* If share mode fails, confirm the installed build's application ID. Check the database path and access permissions for that ID. See [Modes](#modes).
 * If the launcher is slow to boot or crashes, switch to 'local' mode.
 * If it says "Please ensure the Xposed module has been enabled first" and you have the module enabled already, try to force stop then restart the app.
 * Regardless of the minimum SDK version, you must test compatibility with android versions below 14 by yourself.
